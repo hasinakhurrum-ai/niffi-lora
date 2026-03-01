@@ -1,0 +1,32 @@
+# Runtime state (DB, logs, pid, audit, metrics, discovery)
+state/
+
+# Per-bot venvs and workspaces
+projects/*/venv/
+projects/*/workspace/
+
+# Engine output and bot-generated modules (keep only .gitkeep)
+creations/
+generated/*
+!generated/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE / env
+.cursor/
+.venv/
+venv/
+.env
+.env.local
+*.env

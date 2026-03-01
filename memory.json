@@ -1,0 +1,13 @@
+{
+  "best_score": 20969659361765.062,
+  "best_code": "import math\n\ndef evaluate():\n    a = math.sqrt(10)\n    b = math.log(10, 2)\n    c = math.pow(2, 3)\n    return (a * b + c) / (a + b) * 7347885541412.8956\n\nif __name__ == \"__main__\":\n    print(evaluate())",
+  "iteration": 201,
+  "last_feedback": "Score=20969659361765.062, stdout=20969659361765.062\r\n",
+  "_last_result": {
+    "stdout": "20969659361765.062\r\n",
+    "stderr": "",
+    "returncode": 0,
+    "timed_out": false,
+    "duration": 0.0935
+  }
+}

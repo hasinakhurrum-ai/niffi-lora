@@ -66,4 +66,16 @@ Creations are copied under `creations/<id>/` with a manifest; each has a type (c
 
 ## Safety
 
-- Timeouts and output truncation; sandbox cwd = workspace only. No unrestricted internet; fetch is allowlist-only. Daemon is a simple background process with log file; no self-replication or “viral” spread.# niffi-lora
+- Timeouts and output truncation; sandbox cwd = workspace only. No unrestricted internet; fetch is allowlist-only. Daemon is a simple background process with log file; no self-replication or “viral” spread.
+
+## License
+
+This project is open source under the **MIT License**. See [LICENSE](LICENSE) for the full text. You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the Software under the terms of that license.
+
+## Contributing
+
+Contributions are welcome. By contributing, you agree that your contributions will be licensed under the same MIT License. Suggested ways to contribute:
+
+- Open issues for bugs or feature ideas.
+- Submit pull requests with fixes or improvements (code, docs, config, or tests).
+- Share feedback or use cases so the engine can evolve in useful directions.

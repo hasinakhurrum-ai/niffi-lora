@@ -1,0 +1,34 @@
+---
+description: Multi-bot autonomous lab architecture and behavior
+alwaysApply: true
+---
+
+# Multi-bot Autonomous Lab (Ollama + SQLite)
+
+Implement a DB-driven orchestrator for multiple autonomous bots.
+
+## What the LLM is told
+
+The engine exposes itself via `get_self_description()`: host OS, hardware, and software (system_info), core files, generated modules (path + first line), directory structure (generated/core, generated/plugins, generated/utils), and naming rules (including ETL). The engine knows the OS it runs on (env.py: IS_WINDOWS, OS_NAME, venv_python_path); venv path is dynamic (Scripts on Windows, bin on Unix). tools.run_shell(cmd, cwd, timeout_s) runs any OS command. This description is dynamic: new build files and modules appear in the next prompt. The LLM should use it to explain the architecture, accept suggestions (PROPOSAL/MODULE), and know where to add code (self_improve, upgrade_engine) for autonomous evolution. Stream (ASK/RESPONSE/CODE) is the ongoing conversation; after each iteration the engine compiles generated code and continues. The LLM can suggest switching to a different model by outputting MODEL: <model_name>; the engine applies it (Ollama or registered external) for subsequent runs. Self-created models: in PROPOSAL the LLM can output CREATE_MODEL: <name> base=<base_model> SYSTEM: <prompt> to create a new Ollama model from a base, or REGISTER_EXTERNAL: <name> endpoint=<url> to register an external Ollama-compatible API. Successful runs are recorded as training examples (prompt, response, score); the system can train or fine-tune from this data (e.g. via run_shell) and register new models. All registered models (Ollama or external) are first-class and used in parallel by bots.
+
+## Startup
+
+- Create SQLite db at state/lab.db.
+- Create schema: bots, tasks, messages, runs, artifacts.
+- Ensure Ollama reachable; pull default model if missing.
+- Register 2 default bots: crypto_bot, finance_bot (model qwen2.5-coder:3b).
+- Seed each bot with one queued task.
+
+## Loop
+
+- Scheduler picks next runnable task (priority DESC, created_at ASC).
+- bot_runtime executes one full run:
+  - Build prompt from bot.system_prompt + recent messages + best run summary + task prompt (for self_improve/upgrade_engine, include get_self_description()).
+  - Call Ollama streaming generate; print tokens live; store assistant message in DB.
+  - Validate/clean code-only; if invalid run repair once.
+  - For self_improve/upgrade_engine: parse PROPOSAL, MODULE: path CODE:, MODEL: model_name; write modules to generated/, apply MODEL to bot if present.
+  - Ensure sandbox (bot venv + run workspace); write candidate.py; run via sandbox python.exe with timeout; stream stdout to console; store stdout/stderr (truncated) and full log as artifact.
+  - Score from stdout numeric; update runs, bot status, task state; on success enqueue follow-up task.
+- Each cycle: _compile_generated(), _load_generated_plugin(), then next task (fork/daemon compiles and keeps communicating with LLM).
+
+No web UI. No frameworks. OS-aware: venv path = env.venv_python_path(sandboxes/<bot>/venv) (Scripts/python.exe on Windows, bin/python on Unix). Console: [CREATION] shows id, path, "To run: python showcase.py run <id>", and endpoint for servers; [SELF-IMPROVE] when a generated module is added; [BUILD] after compile with module counts; [ENGINE] at startup with OS, Python, CPU, memory.

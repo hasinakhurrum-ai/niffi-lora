@@ -1,0 +1,39 @@
+We are building a Windows (Git Bash) local autonomous multi-bot system using Ollama + SQLite.
+
+PRIMARY GOAL
+- Multiple bots (finance/crypto/anything) autonomously generate CODE-ONLY Python via Ollama, execute in persistent sandboxes, stream outputs, and store all chats + runs in SQLite.
+
+HARD REQUIREMENTS
+- Ollama API is used directly at http://localhost:11434
+  - /api/tags, /api/pull, /api/generate
+- Must support streaming generation (stream=true) and print streamed tokens live.
+- Must store all messages (system/user/assistant/tool) to SQLite with timestamps.
+- Must store all runs to SQLite: code path, stdout/stderr, returncode, duration, score, status.
+- Must maintain persistent sandboxes inside repo (NOT temp dirs):
+  - sandboxes/<bot_name>/venv/  (per bot venv)
+  - sandboxes/<bot_name>/runs/run_XXXX/workspace/  (per run workspace)
+- Engine's own environment MUST NOT execute generated code.
+  Generated code must always run using the sandbox venv python.exe.
+- Must be Windows-compatible:
+  - sandbox python path = venv/Scripts/python.exe
+  - use pathlib, do not assume POSIX paths
+- Dependency installation is OFF by default. If enabled later, it must be allowlist-based and installed only into sandbox venv.
+
+SAFETY
+- Treat LLM output as untrusted.
+- Enforce strict timeout and maximum log sizes (truncate).
+- Never execute shell commands from LLM output.
+- Never allow candidate to modify engine files. Candidate runs with cwd set to its workspace.
+
+ARCHITECTURE MODULES (must exist)
+- db.py: sqlite schema + helpers
+- ollama_client.py: streaming + non-streaming generate, model ensure/pull
+- scheduler.py: selects next bot/task to run
+- bot_runtime.py: prompt building, generate, validate, execute, score, persist
+- validator.py: code-only enforcement + ast.parse
+- sandbox.py: ensure bot venv, run candidate with streaming stdout
+- main.py: orchestrator loop
+
+DELIVERABLES
+- `python main.py` starts orchestrator, creates db, registers default bots, runs bots.
+- README with Windows Git Bash instructions.
