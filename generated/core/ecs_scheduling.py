@@ -69,10 +69,13 @@ def sync_from_db(world: ECSWorld) -> None:
         )
 
     # Ensure task entities for queued tasks
-    with _conn() as conn:
+    conn = _conn()
+    try:
         rows = conn.execute(
             "SELECT id, bot_id, priority, task_type, created_at FROM tasks WHERE state='queued' ORDER BY priority DESC, created_at ASC"
         ).fetchall()
+    finally:
+        conn.close()
 
     for r in rows:
         tid = int(r["id"])

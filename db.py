@@ -530,6 +530,11 @@ def mark_task_done(task_id: int) -> None:
     set_task_state(task_id, "done")
 
 
+def mark_task_running(task_id: int) -> None:
+    """Convenience: set task state to running (e.g. when distributed master claims a task)."""
+    set_task_state(task_id, "running")
+
+
 def mark_task_failed(task_id: int) -> None:
     """Convenience: set task state to failed."""
     set_task_state(task_id, "failed")

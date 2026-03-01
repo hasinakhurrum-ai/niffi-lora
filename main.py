@@ -458,6 +458,18 @@ def _load_all_generated_hooks() -> None:
             _log(f"[EVOLVE] Hook load/on_cycle failed {py}: {e}")
 
 
+def _load_registry_plugins() -> None:
+    """Load generated/plugins/registry_plugin so it can assign registry.scheduler, scorer_override, after_run."""
+    try:
+        import importlib.util
+        spec = importlib.util.find_spec("generated.plugins.registry_plugin")
+        if spec and spec.loader:
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+    except Exception as e:
+        _log(f"[EVOLVE] Registry plugin load failed: {e}")
+
+
 def _update_architecture_and_capabilities_snapshot() -> None:
     """
     Refresh architecture_state and capabilities_registry with a lightweight snapshot.
@@ -721,6 +733,7 @@ def main() -> None:
                     pass
             _compile_generated()
             _load_all_generated_hooks()
+            _load_registry_plugins()
             # Snapshot throttling: update every 5 cycles to reduce DB/CPU load
             if cycle_index % 5 == 0:
                 _update_architecture_and_capabilities_snapshot()
@@ -743,10 +756,21 @@ def main() -> None:
                 except Exception:
                     pass
             # When CORE_FIRST_SLOTS > 0, always use core-first scheduling so kernel improvement is fast-paced.
-            # Otherwise ECS (if available) then legacy DB.
+            # Otherwise try registry.scheduler (generated code), then ECS, then legacy DB.
             tasks = []
+            try:
+                from registry import registry
+                if registry.scheduler and callable(registry.scheduler):
+                    try:
+                        reg_tasks = registry.scheduler(concurrency, tick=ctx)
+                        if reg_tasks and isinstance(reg_tasks, list):
+                            tasks = reg_tasks
+                    except Exception as e:
+                        _log(f"[EVOLVE] Registry scheduler failed: {e}")
+            except Exception:
+                pass
             core_slots = getattr(config, "CORE_FIRST_SLOTS", 0)
-            if core_slots and core_slots > 0:
+            if not tasks and core_slots and core_slots > 0:
                 tasks = db.get_next_tasks_with_core_first(concurrency, core_slots)
             if not tasks and ctx:
                 try:

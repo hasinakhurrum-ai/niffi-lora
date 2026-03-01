@@ -27,7 +27,7 @@ def execute_task(task: dict) -> dict:
         bot = db.get_bot(bot_id=bot_id)
         if not bot:
             return {"task_id": task_id, "status": "error", "error": "bot_not_found"}
-        run_task(task_id=task_id, bot=bot, prompt=prompt, task_type=task_type)
+        run_task(task_id=task_id, bot_id=bot_id, prompt=prompt, task_type=task_type)
         return {"task_id": task_id, "status": "ok"}
     except Exception as e:
         return {"task_id": task_id, "status": "error", "error": str(e), "trace": traceback.format_exc()[:4000]}

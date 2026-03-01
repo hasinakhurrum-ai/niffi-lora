@@ -25,6 +25,7 @@ ENGINE_FILES = [
     ("scorer.py", "Scorer: extract_numeric, compute_score by task_type."),
     ("tools.py", "search_web, fetch_url, pip_install, run_shell(env_overlay); docker_* (host=, resource limits); run_model_from_docker; register_external_model; run_remote_ssh, list/register/run_on_remote_instance (Kali); create_ollama_model, collect_training_example; git_repo_root, git_status, git_branch_list, git_branch_create, git_checkout, git_add, git_commit, git_merge, git_push (full repo access)."),
     ("self_description.py", "Self description: get_self_description for LLM context."),
+    ("registry.py", "Registry: scheduler, scorer_override, after_run. Assign in generated/plugins/registry_plugin.py to make generated code part of the main loop."),
 ]
 
 GENERATED_DIR = getattr(config, "GENERATED_MODULES_DIR", "generated")
@@ -102,6 +103,14 @@ def get_self_description() -> str:
     lines.append("You can propose PROPOSAL: (text) or output MODULE: path/to/module.py CODE: (Python) to create/upgrade a module under generated/.")
     lines.append("The engine compiles all generated Python each cycle and reruns; improvements are loaded automatically.")
     lines.append("Self-scale / self-improve while running: Any module under generated/ (core/, plugins/, utils/) that defines a callable on_cycle() is imported and run every cycle. Whatever you generate becomes part of the running system immediately; add on_cycle() to your module to hook into each loop.")
+    lines.append("")
+    lines.append("--- UTILIZATION (how generated code becomes part of the main system) ---")
+    lines.append("1. on_cycle(): Any generated module that defines on_cycle() is imported and on_cycle() is run every engine cycle.")
+    lines.append("2. Registry (generated/plugins/registry_plugin.py): This module is loaded each cycle. Assign registry.scheduler, registry.scorer_override, or registry.after_run so your code drives the main loop:")
+    lines.append("   - registry.scheduler = callable(concurrency, tick=None) -> list of task dicts (id, bot_id, prompt, task_type, ...). If set and returns a non-empty list, the main loop uses it for task selection.")
+    lines.append("   - registry.scorer_override = callable(result, task_type) -> (score, valid) or None. If set and returns (score, valid), bot_runtime uses it instead of the default scorer.")
+    lines.append("   - registry.after_run = callable(bot_id, task_id, result, task_type, score, valid, **kwargs). If set, called after each task run (after reflection).")
+    lines.append("To be utilized, either define on_cycle() in your module or in registry_plugin.py assign one of these so your code becomes part of the main system.")
     lines.append("")
     lines.append("--- RESEARCH, SEARCH, SCRAPE, INSTALL, MODELS ---")
     lines.append("You can search the web, scrape content, install libs, and make them part of your own layers:")

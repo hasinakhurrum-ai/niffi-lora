@@ -38,7 +38,8 @@ def _check_db() -> bool:
 def _check_ollama() -> bool:
     try:
         import requests
-        r = requests.get(f"{getattr(config, 'OLLAMA_URL', 'http://localhost:11434')}/api/tags", timeout=3)
+        url = getattr(config, "OLLAMA_URL", "http://localhost:11434") if config else "http://localhost:11434"
+        r = requests.get(f"{url}/api/tags", timeout=3)
         return r.status_code == 200
     except Exception:
         return False
@@ -83,7 +84,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif self.path == "/metrics" or self.path == "/metrics/":
-            state_dir = getattr(config, "STATE_DIR", "state")
+            state_dir = getattr(config, "STATE_DIR", "state") if config else "state"
             path = os.path.join(state_dir, "metrics.json")
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -96,7 +97,7 @@ class _HealthHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif self.path == "/audit" or self.path == "/audit/":
-            state_dir = getattr(config, "STATE_DIR", "state")
+            state_dir = getattr(config, "STATE_DIR", "state") if config else "state"
             path = os.path.join(state_dir, "audit.log")
             lines = []
             try:
@@ -117,7 +118,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        if not getattr(config, "WEBHOOK_IN_ENABLED", False):
+        webhook_enabled = config and getattr(config, "WEBHOOK_IN_ENABLED", False)
+        if not webhook_enabled:
             self.send_response(404)
             self.end_headers()
             return
@@ -175,9 +177,10 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
 def start_health_server() -> None:
     """Start health server in a daemon thread. Call once at startup."""
-    if not getattr(config, "HEALTH_ENABLED", True):
+    health_enabled = getattr(config, "HEALTH_ENABLED", True) if config else True
+    if not health_enabled:
         return
-    port = getattr(config, "HEALTH_PORT", 8765)
+    port = getattr(config, "HEALTH_PORT", 8765) if config else 8765
     try:
         server = HTTPServer(("", port), _HealthHandler)
         server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

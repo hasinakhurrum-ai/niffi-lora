@@ -613,7 +613,20 @@ def run_task(task_id: int, bot_id: int, prompt: str, task_type: str = "code") ->
         _propose_next_task(bot, _log_bot)
         return
 
-    score, valid = compute_score(result, task_type)
+    score, valid = None, False
+    try:
+        from registry import registry
+        if registry.scorer_override and callable(registry.scorer_override):
+            try:
+                out = registry.scorer_override(result, task_type)
+                if out is not None and isinstance(out, (tuple, list)) and len(out) >= 2:
+                    score, valid = out[0], bool(out[1])
+            except Exception:
+                pass
+    except Exception:
+        pass
+    if score is None:
+        score, valid = compute_score(result, task_type)
     duration_ms = int((result.get("duration") or 0) * 1000)
     status = "ok" if valid and not result.get("timed_out") and result.get("returncode") == 0 else ("timeout" if result.get("timed_out") else "crash")
 
@@ -623,14 +636,14 @@ def run_task(task_id: int, bot_id: int, prompt: str, task_type: str = "code") ->
         api_base, model_name = _bot_model(bot, task_type, purpose='repair')
         raw2 = _generate(model_name, repair_prompt, purpose='repair', stream=config.STREAM_LLM, temperature=0.3, api_base=api_base, bot=bot, task_type=task_type)
         _console_response(raw2)
-        code2 = enforce_contract(clean_output(raw2), "code")
+        code2 = enforce_contract(clean_output(raw2), task_type)
         _console_code(code2)
         if is_valid_python(code2):
             result2 = run_candidate(
                 code2, get_project_workspace(bot["name"]), ensure_bot_venv(bot["name"]),
                 timeout_s=config.TIMEOUT_S, stream_stdout=config.STREAM_PROGRAM_OUTPUT,
             )
-            score2, valid2 = compute_score(result2, "code")
+            score2, valid2 = compute_score(result2, task_type)
             if valid2:
                 result, code, status = result2, code2, "repaired"
                 score, valid, duration_ms = score2, True, int((result2.get("duration") or 0) * 1000)
@@ -661,6 +674,16 @@ def run_task(task_id: int, bot_id: int, prompt: str, task_type: str = "code") ->
         _collect_website_artifacts(workspace, run_id)
 
     _reflect(bot, result, score, valid, _log_bot)
+
+    try:
+        from registry import registry
+        if registry.after_run and callable(registry.after_run):
+            try:
+                registry.after_run(bot_id, task_id, result, task_type, score, valid, bot=bot, prompt=prompt, code=code)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
     if valid:
         _log_bot(f"[BACKGROUND] Task {task_id} SUCCESS | type={task_type} score={score}")
