@@ -2,7 +2,8 @@
 Orchestrator: DB-driven multi-bot loop.
 Create schema, ensure Ollama, register default bots, seed tasks, then loop.
   python main.py         -> foreground
-  python main.py --daemon -> run in background, log to state/daemon.log, PID in state/daemon.pid
+  python main.py --daemon -> fork to background (Unix) or spawn detached (Windows),
+                            log to state/daemon.log, PID in state/daemon.pid. Returns immediately.
 """
 
 import os
@@ -888,10 +889,49 @@ def main() -> None:
 
 
 def _daemonize() -> None:
-    """Redirect stdout/stderr to daemon.log, write PID, then run main in this process."""
+    """Run main in background; adapts to OS. Unix: double-fork. Windows: detached subprocess."""
     os.makedirs(config.STATE_DIR, exist_ok=True)
     log_path = config.DAEMON_LOG_PATH
     pid_path = config.DAEMON_PID_PATH
+
+    if hasattr(os, "fork"):
+        # Linux / Ubuntu / macOS: double-fork to fully detach from terminal
+        pid = os.fork()
+        if pid > 0:
+            # First parent exits immediately; shell returns
+            raise SystemExit(0)
+        # First child: become session leader, detach from controlling terminal
+        try:
+            os.setsid()
+        except OSError:
+            pass
+        pid2 = os.fork()
+        if pid2 > 0:
+            # Second parent exits; grandchild is orphaned, adopted by init
+            raise SystemExit(0)
+        # Grandchild continues as daemon
+    else:
+        # Windows: spawn detached subprocess (no fork); parent exits immediately
+        import subprocess
+        cmd = [sys.executable, "-u", __file__] + [
+            a for a in sys.argv[1:] if a != "--daemon"
+        ] + ["--daemon-child"]
+        flags = 0
+        if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+            flags |= subprocess.CREATE_NEW_PROCESS_GROUP
+        if hasattr(subprocess, "DETACHED_PROCESS"):
+            flags |= subprocess.DETACHED_PROCESS
+        subprocess.Popen(
+            cmd,
+            cwd=os.getcwd(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=flags if flags else 0,
+        )
+        raise SystemExit(0)
+
+    # Daemon process (Unix): redirect and run
     try:
         with open(log_path, "a", encoding="utf-8") as logf:
             logf.write("\n--- daemon start ---\n")
@@ -944,9 +984,28 @@ if __name__ == "__main__":
             sys.exit(1)
         sys.exit(0)
 
-    if "--daemon" in sys.argv:
+    if "--daemon-child" in sys.argv:
+        # Windows daemon child: redirect, write PID, run main (no more fork)
+        os.makedirs(config.STATE_DIR, exist_ok=True)
+        try:
+            with open(config.DAEMON_LOG_PATH, "a", encoding="utf-8") as logf:
+                logf.write("\n--- daemon child start ---\n")
+            sys.stdout = open(config.DAEMON_LOG_PATH, "a", encoding="utf-8")
+            sys.stderr = sys.stdout
+            with open(config.DAEMON_PID_PATH, "w", encoding="utf-8") as f:
+                f.write(str(os.getpid()))
+        except Exception:
+            pass
+        try:
+            main()
+        except Exception as exc:
+            _handle_fatal_exception(exc)
+            raise
+    elif "--daemon" in sys.argv:
         try:
             _daemonize()
+        except SystemExit:
+            raise
         except Exception as exc:
             _handle_fatal_exception(exc)
             raise
