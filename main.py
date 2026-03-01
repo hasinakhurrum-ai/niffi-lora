@@ -756,6 +756,23 @@ def main() -> None:
                             _log(f"[BACKGROUND] Remote model {r.get('name')} at {r.get('url')} unreachable")
                 except Exception:
                     pass
+            # Auto-pull: periodically pull and restart if HEAD changed (server stays in sync with other instances)
+            pull_every = getattr(config, "GIT_AUTO_PULL_EVERY_N_CYCLES", 0)
+            if pull_every and cycle_index > 0 and cycle_index % pull_every == 0 and getattr(config, "GIT_ENGINE_ENABLED", True):
+                try:
+                    from tools import git_repo_root, git_head_rev, git_pull, git_current_branch
+                    cwd = git_repo_root()
+                    if cwd and getattr(config, "GIT_ALLOW_PULL", True):
+                        head_before = git_head_rev(cwd)
+                        branch = git_current_branch(cwd)
+                        r, o, e = git_pull("origin", branch or None, cwd)
+                        if r == 0:
+                            head_after = git_head_rev(cwd)
+                            if head_before is not None and head_after is not None and head_before != head_after:
+                                _log("[ENGINE] Git pull updated HEAD, restarting to load new code...")
+                                os.execv(sys.executable, [sys.executable, "-u", os.path.abspath(__file__)] + [a for a in sys.argv[1:]])
+                except Exception as ex:
+                    _log(f"[BACKGROUND] Auto-pull/restart skipped: {ex}")
             # When CORE_FIRST_SLOTS > 0, always use core-first scheduling so kernel improvement is fast-paced.
             # Otherwise try registry.scheduler (generated code), then ECS, then legacy DB.
             tasks = []

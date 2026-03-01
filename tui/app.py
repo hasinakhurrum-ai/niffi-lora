@@ -929,6 +929,8 @@ Button.-primary:hover {
         self._run_engine = run_engine
         self._process: subprocess.Popen | None = None
         self._reader_thread: threading.Thread | None = None
+        self._source_watch_stop = False
+        self._source_watcher_thread: threading.Thread | None = None
         self._instruction_history: list[str] = []
         self._project_run_locks: dict[str, threading.Lock] = {}
         self._live_unseen = 0
@@ -1043,6 +1045,7 @@ Button.-primary:hover {
             self.set_timer(0.2, _maybe_show_project_selector)
         if self._run_engine:
             self._start_engine_subprocess()
+            self._start_source_watcher()
 
     def _start_engine_subprocess(self) -> None:
         """Start main.py in subprocess and stream stdout to TUI."""
@@ -1069,6 +1072,69 @@ Button.-primary:hover {
             daemon=True,
         )
         self._reader_thread.start()
+
+    def _restart_engine_subprocess(self) -> None:
+        """Terminate current engine subprocess and start a new one (call from main thread)."""
+        if self._process:
+            try:
+                self._process.terminate()
+                self._process.wait(timeout=5)
+            except Exception:
+                try:
+                    self._process.kill()
+                except Exception:
+                    pass
+            self._process = None
+        try:
+            sv = self.query_one("#timeline-stream", StreamView)
+            sv.append_event("[TUI] Source changed, restarting engine...")
+        except Exception:
+            pass
+        self._start_engine_subprocess()
+
+    def _source_watcher_loop(self) -> None:
+        """Background loop: poll source mtimes; on change, restart engine via call_from_thread."""
+        import time
+        try:
+            import config
+            interval = getattr(config, "TUI_RELOAD_POLL_INTERVAL_S", 2)
+        except Exception:
+            interval = 2
+        root = Path(NIFFI_ROOT)
+        paths = list(root.glob("*.py")) + (list((root / "tui").glob("*.py")) if (root / "tui").exists() else [])
+        paths = [p for p in paths if p.is_file()]
+        last_mtime = None
+        while not self._source_watch_stop:
+            try:
+                mtimes = []
+                for p in paths:
+                    try:
+                        mtimes.append(p.stat().st_mtime)
+                    except OSError:
+                        pass
+                current = max(mtimes) if mtimes else None
+                if last_mtime is not None and current is not None and current != last_mtime:
+                    self.call_from_thread(self._restart_engine_subprocess)
+                if current is not None:
+                    last_mtime = current
+            except Exception:
+                pass
+            for _ in range(int(interval * 10)):
+                if self._source_watch_stop:
+                    break
+                time.sleep(0.1)
+
+    def _start_source_watcher(self) -> None:
+        """Start background thread that watches source files and restarts engine on change."""
+        try:
+            import config
+            if not getattr(config, "TUI_RELOAD_ENGINE_ON_SOURCE_CHANGE", True):
+                return
+        except Exception:
+            pass
+        self._source_watch_stop = False
+        self._source_watcher_thread = threading.Thread(target=self._source_watcher_loop, daemon=True)
+        self._source_watcher_thread.start()
 
     def _read_engine_stdout(self) -> None:
         if not self._process or not self._process.stdout:

@@ -210,9 +210,18 @@ GIT_COMMIT_EVERY_N_CYCLES = 0
 GIT_ENGINE_ENABLED = True
 GIT_REPO_ROOT = os.environ.get("NIFFI_GIT_REPO_ROOT", "")  # Empty = infer from tools.py location (repo containing .git).
 GIT_ALLOW_PUSH = False
+# When True, after every successful git_commit the engine runs git push origin <current_branch> (still requires GIT_ALLOW_PUSH).
+GIT_AUTO_PUSH_AFTER_COMMIT = True
 GIT_PROTECTED_BRANCHES = ("main", "master")  # Refuse merging into these branches via automation.
 GIT_AUDIT = True   # Emit audit_log for every mutating git op (branch, checkout, add, commit, merge, push).
 GIT_TIMEOUT_S = 30
+# When > 0, every N cycles the engine runs git pull and restarts if HEAD changed (server stays in sync with pushes from other instances).
+GIT_AUTO_PULL_EVERY_N_CYCLES = 30
+GIT_ALLOW_PULL = True
+
+# TUI: when True, watch source files and restart engine subprocess on change (so you don't restart TUI manually).
+TUI_RELOAD_ENGINE_ON_SOURCE_CHANGE = True
+TUI_RELOAD_POLL_INTERVAL_S = 2
 
 # Quantum (Phase 4); install qiskit, qiskit-aer to use
 QUANTUM_ENABLED = False

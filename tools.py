@@ -737,6 +737,15 @@ def git_commit(message: str, cwd: str | None = None) -> tuple[int, str, str]:
     r, o, e = _git_run(["commit", "-m", msg], cwd)
     if r == 0:
         _git_audit("commit", message=msg[:200], returncode=r, out=(o or e)[:300])
+        if getattr(config, "GIT_AUTO_PUSH_AFTER_COMMIT", False):
+            try:
+                branch = _git_current_branch(cwd)
+                if branch:
+                    rp, op, ep = git_push("origin", branch, cwd)
+                    if rp != 0 and (op or ep):
+                        _git_audit("push_after_commit", returncode=rp, out=(op or ep)[:300])
+            except Exception:
+                pass
     return (r, o, e)
 
 
@@ -745,6 +754,11 @@ def _git_current_branch(cwd: str | None) -> str | None:
     if r != 0 or not (o or "").strip():
         return None
     return (o or e).strip().split("\n")[0].strip()
+
+
+def git_current_branch(cwd: str | None = None) -> str | None:
+    """Return current branch name. None if not a repo or error."""
+    return _git_current_branch(cwd)
 
 
 def git_merge(branch_or_ref: str, cwd: str | None = None) -> tuple[int, str, str]:
@@ -774,4 +788,27 @@ def git_push(remote: str | None = None, branch: str | None = None, cwd: str | No
     r, o, e = _git_run(args, cwd)
     if r == 0:
         _git_audit("push", remote=remote, branch=branch, returncode=r, out=(o or e)[:300])
+    return (r, o, e)
+
+
+def git_head_rev(cwd: str | None = None) -> str | None:
+    """Return current HEAD commit hash (short). None if not a repo or error."""
+    r, o, e = _git_run(["rev-parse", "HEAD"], cwd)
+    if r != 0 or not (o or "").strip():
+        return None
+    return (o or e).strip().split("\n")[0].strip()
+
+
+def git_pull(remote: str | None = None, branch: str | None = None, cwd: str | None = None) -> tuple[int, str, str]:
+    """Pull from remote. Disabled unless config.GIT_ALLOW_PULL is True. Returns (returncode, stdout, stderr)."""
+    if not getattr(config, "GIT_ALLOW_PULL", True):
+        return (-1, "", "[git pull disabled by config]")
+    args = ["pull"]
+    if remote:
+        args.append(remote)
+    if branch:
+        args.append(branch)
+    r, o, e = _git_run(args, cwd)
+    if r == 0:
+        _git_audit("pull", remote=remote, branch=branch, returncode=r, out=(o or e)[:300])
     return (r, o, e)
